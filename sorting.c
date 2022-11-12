@@ -56,7 +56,7 @@ int main (void)
   // Create the first (left side) sorting thread
   pthread_attr_t  attr;
   pthread_attr_init(&attr);   // Set the default attribute values. No changes to default needed here.
-  pthread_create( ... );
+  pthread_create(&workers[0], 0, sorter, (void *) paramsLeft);
 
 
 
@@ -66,12 +66,12 @@ int main (void)
   paramsRight->size                     = SIZE - paramsLeft->size;  // taking difference addresses an add number of elements
 
   // Create the second (right side) sorting thread
-  pthread_create( ... );       // NULL pointer attribute argument means to use default values (same net affect as above, just another way to get there)
+  pthread_create(&workers[1], 0, sorter, (void *) paramsRight);       // NULL pointer attribute argument means to use default values (same net affect as above, just another way to get there)
 
 
   // now wait for the 2 sorting threads to finish
-  pthread_join( ... );  // NULL pointer means we are ignoring the returned valued from sorter()
-  pthread_join( ... );
+  pthread_join(workers[0], NULL);  // NULL pointer means we are ignoring the returned valued from sorter()
+  pthread_join(workers[1], NULL);
 
 
 
@@ -86,10 +86,10 @@ int main (void)
   paramsMerge->right = *paramsRight;
 
   pthread_t tid;
-  pthread_create( ... );
+  pthread_create(&workers[2], 0, merger, (void *) paramsMerge);
 
   /* wait for the merge thread to finish */
-  pthread_join( ... );
+  pthread_join(workers[2], NULL);
 
 
   // free parameter storage
@@ -108,15 +108,6 @@ int main (void)
   return 0;
 }
 
-
-
-
-
-
-
-
-
-
 /**********************************
 ** Sorting thread.
 **
@@ -126,34 +117,21 @@ int main (void)
 void *sorter(void *params)
 {
   SortingThreadParameters * p = params;
+  int * const begin = p->subArray;
+  int * const end   = begin + p->size;
 
-  #if 0  // You can use the suggested sorting algorithm below or write your own
-    // Simple, but inefficient bubble sort.
-    int * const begin = p->subArray;
-    int * const end   = begin + p->size;
-
-    for( int * i = begin; i < end; ++i ) for( int * j = i+1; j < end; ++j )
+  for( int * i = begin; i < end; ++i ) for( int * j = i+1; j < end; ++j )
+  {
+    if(*i > *j) // swap?
     {
-      if(*i > *j) // swap?
-      {
-        int temp = *i;
-        *i       = *j;
-        *j       = temp;
-      }
+      int temp = *i;
+      *i       = *j;
+      *j       = temp;
     }
-  #endif
+  }
 
   pthread_exit(0);
 }
-
-
-
-
-
-
-
-
-
 
 /**********************************
 ** Merge thread
@@ -164,29 +142,27 @@ void *sorter(void *params)
 void *merger(void *params)
 {
   MergingThreadParameters * p = params;
+  int * const leftBegin  = p->left .subArray;
+  int * const rightBegin = p->right.subArray;
+  int * const leftEnd    = leftBegin  + p->left .size;
+  int * const rightEnd   = rightBegin + p->right.size;
 
-  #if 0    // You can use the suggested merge algorithm below or write your own
-    int * const leftBegin  = p->left .subArray;
-    int * const rightBegin = p->right.subArray;
-    int * const leftEnd    = leftBegin  + p->left .size;
-    int * const rightEnd   = rightBegin + p->right.size;
+  int * resultPosition  = result;	// position being inserted into result list
 
-    int * resultPosition  = result;	// position being inserted into result list
+  int *leftPosition  = leftBegin,
+      *rightPosition = rightBegin;
 
-    int *leftPosition  = leftBegin,
-        *rightPosition = rightBegin;
+  while (leftPosition < leftEnd  &&  rightPosition < rightEnd)
+  {
+    if (*leftPosition < *rightPosition) *resultPosition++ = *leftPosition++;
+    else                                *resultPosition++ = *rightPosition++;
+  }
 
-    while (leftPosition < leftEnd  &&  rightPosition < rightEnd)
-    {
-      if (*leftPosition < *rightPosition) *resultPosition++ = *leftPosition++;
-      else                                *resultPosition++ = *rightPosition++;
-    }
-
-    // copy the remainder
-    // Note: only one of these loops will execute.
-    while (leftPosition  < leftEnd)  *resultPosition++ = *leftPosition++;
-    while (rightPosition < rightEnd) *resultPosition++ = *rightPosition++;
-  #endif
+  // copy the remainder
+  // Note: only one of these loops will execute.
+  while (leftPosition  < leftEnd)  *resultPosition++ = *leftPosition++;
+  while (rightPosition < rightEnd) *resultPosition++ = *rightPosition++;
+  
 
   pthread_exit(0);
 }
